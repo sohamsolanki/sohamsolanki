@@ -1,8 +1,8 @@
 ## Hi there! 👋
-🌱 My name is Soham Solanki! I'm currently studying Information Science and Data Analytics @ UIUC.
-🧑‍💻 Experience with HTML, CSS, Java, Javascript, Python, and C++.
-📫 How to reach me: [email](mailto:sohamsolanki@outlook.com) is preferred!
-🏙️ Reach out on [LinkedIn](linkedin.com/in/sohamsolanki), I would love to connect!
+- 🌱 My name is Soham Solanki! I'm currently studying Information Science and Data Analytics @ UIUC.
+- 🧑‍💻 Experience with HTML, CSS, Java, Javascript, Python, and C++.
+- 📫 How to reach me: [email](mailto:sohamsolanki@outlook.com) is preferred!
+- 🏙️ Reach out on [LinkedIn](linkedin.com/in/sohamsolanki), I would love to connect!
 
 <!--
 **sohamsolanki/sohamsolanki** is a ✨ _special_ ✨ repository because its `README.md` (this file) appears on your GitHub profile.
