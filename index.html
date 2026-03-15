@@ -1,0 +1,623 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>The World Dispatch — Geopolitical News Dashboard</title>
+
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;0,900;1,400&display=swap" rel="stylesheet" />
+
+  <!-- React 18 -->
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+
+  <!-- Babel for in-browser JSX -->
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { background: #f2ece0; font-family: Georgia, 'Times New Roman', serif; }
+
+    .np-font { font-family: 'Playfair Display', Georgia, 'Times New Roman', serif; }
+
+    /* Map tile greyscale */
+    .leaflet-tile { filter: grayscale(88%) contrast(90%) brightness(108%) sepia(8%); }
+
+    /* Leaflet popup / tooltip newspaper style */
+    .leaflet-popup-content-wrapper {
+      background: #f2ece0 !important;
+      border: 1px solid #9c8b72 !important;
+      border-radius: 0 !important;
+      box-shadow: 3px 3px 10px rgba(0,0,0,.25) !important;
+      font-family: Georgia, serif;
+      font-size: 12px;
+      color: #1a1a1a;
+    }
+    .leaflet-popup-tip { background: #f2ece0 !important; }
+    .leaflet-popup-content { margin: 10px 14px !important; line-height: 1.5; }
+    .leaflet-container a.leaflet-popup-close-button { color: #5a4a3a !important; }
+    .leaflet-tooltip {
+      background: #f2ece0 !important;
+      border: 1px solid #9c8b72 !important;
+      border-radius: 0 !important;
+      font-family: Georgia, serif !important;
+      font-size: 11px !important;
+      font-weight: bold !important;
+      color: #1a1a1a !important;
+      box-shadow: 2px 2px 6px rgba(0,0,0,.2) !important;
+      padding: 3px 8px !important;
+    }
+    .leaflet-tooltip-top::before { border-top-color: #9c8b72 !important; }
+
+    /* Pulsing marker ring */
+    @keyframes pulse-ring {
+      0%   { transform: scale(.6);  opacity: .9; }
+      70%  { transform: scale(2.2); opacity: 0;  }
+      100% { transform: scale(2.2); opacity: 0;  }
+    }
+    .pulse-ring {
+      position: absolute; inset: 0; border-radius: 50%;
+      animation: pulse-ring 2.2s ease-out infinite;
+    }
+
+    /* Footer ticker */
+    @keyframes ticker-scroll {
+      from { transform: translateX(0); }
+      to   { transform: translateX(-50%); }
+    }
+    .ticker-track {
+      display: flex; white-space: nowrap;
+      animation: ticker-scroll 55s linear infinite;
+      will-change: transform;
+    }
+    .ticker-track:hover { animation-play-state: paused; }
+
+    /* Headline rows */
+    .hl-row {
+      border-bottom: 1px solid #c5b49a; padding: 9px 0;
+      cursor: pointer; transition: background .12s;
+    }
+    .hl-row:hover { background: rgba(196,180,154,.18); }
+
+    /* Drop-cap */
+    .drop-cap {
+      font-family: 'Playfair Display', Georgia, serif;
+      font-size: 62px; font-weight: 900; float: left;
+      line-height: .78; margin-right: 5px; margin-top: 6px; color: #1a1a1a;
+    }
+
+    /* Skeleton shimmer */
+    @keyframes shimmer {
+      0%, 100% { opacity: .45; }
+      50%       { opacity: .9;  }
+    }
+    .skeleton { animation: shimmer 1.6s ease-in-out infinite; background: #c5b49a; border-radius: 2px; }
+
+    /* Scrollbars */
+    ::-webkit-scrollbar       { width: 5px; }
+    ::-webkit-scrollbar-track { background: #e8e0cc; }
+    ::-webkit-scrollbar-thumb { background: #9c8b72; }
+
+    .col-rule { border-right: 1px solid #9c8b72; }
+
+    .sec-label {
+      display: block; font-family: Georgia, serif; font-size: 9px;
+      font-weight: bold; letter-spacing: .18em; text-transform: uppercase;
+      color: #7a6550; margin-bottom: 4px;
+    }
+
+    .badge-breaking   { color: #991b1b; font-size: 9px; font-weight: bold; letter-spacing: .14em; text-transform: uppercase; }
+    .badge-developing { color: #92400e; font-size: 9px; font-weight: bold; letter-spacing: .14em; text-transform: uppercase; }
+    .badge-update     { color: #3b4a6b; font-size: 9px; font-weight: bold; letter-spacing: .14em; text-transform: uppercase; }
+
+    /* API key modal */
+    .modal-overlay {
+      position: fixed; inset: 0; background: rgba(10,10,10,.72);
+      display: flex; align-items: center; justify-content: center; z-index: 9999;
+    }
+    .modal-box {
+      background: #f2ece0; border: 2px solid #1a1a1a; padding: 32px 36px;
+      max-width: 480px; width: 90%; font-family: Georgia, serif;
+    }
+    .modal-box h2 { font-family: 'Playfair Display', Georgia, serif; font-size: 22px; margin-bottom: 8px; }
+    .modal-box p  { font-size: 13px; color: #5a4a3a; line-height: 1.6; margin-bottom: 18px; }
+    .modal-box input {
+      width: 100%; padding: 9px 12px; border: 1px solid #9c8b72;
+      background: #ede7d9; font-family: Georgia, serif; font-size: 13px;
+      margin-bottom: 14px; outline: none; color: #1a1a1a;
+    }
+    .modal-box input:focus { border-color: #1a1a1a; }
+    .modal-box button {
+      background: #1a1a1a; color: #f2ece0; border: none; padding: 10px 24px;
+      font-family: Georgia, serif; font-size: 12px; letter-spacing: .12em;
+      text-transform: uppercase; cursor: pointer;
+    }
+    .modal-box button:hover { background: #3a2a1a; }
+    .modal-box .skip-btn {
+      background: transparent; color: #7a6550; border: 1px solid #9c8b72; margin-left: 10px;
+    }
+    .modal-box .skip-btn:hover { background: #ede7d9; }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState, useEffect, useRef } = React;
+
+    // ─── static data ────────────────────────────────────────────────────────
+    const CONFLICT_HOTSPOTS = [
+      { id:1,  lat:35.6892, lng:51.389,  name:"Tehran",    type:"diplomatic", desc:"Iranian leadership holds emergency security council session amid escalating regional tensions." },
+      { id:2,  lat:31.7683, lng:35.2137, name:"Jerusalem", type:"diplomatic", desc:"Israeli cabinet convenes amid rising threats from Iranian-backed proxies across northern borders." },
+      { id:3,  lat:33.8869, lng:35.5131, name:"Beirut",    type:"ground",     desc:"Hezbollah forces maintain heightened readiness along the southern frontier." },
+      { id:4,  lat:36.2021, lng:37.1343, name:"Aleppo",    type:"airstrike",  desc:"Coalition aircraft report strikes on Iranian weapons transfer routes in northern Syria." },
+      { id:5,  lat:33.5138, lng:36.2765, name:"Damascus",  type:"airstrike",  desc:"Israeli Air Force conducts third sortie this week targeting IRGC positions." },
+      { id:6,  lat:33.3152, lng:44.3661, name:"Baghdad",   type:"diplomatic", desc:"Iraqi parliament demands coalition explanation for cross-border operations." },
+      { id:7,  lat:24.6877, lng:46.7219, name:"Riyadh",    type:"diplomatic", desc:"Saudi Crown Prince holds rare direct call with Iranian foreign minister." },
+      { id:8,  lat:25.2048, lng:55.2708, name:"Dubai",     type:"diplomatic", desc:"GCC emergency summit convenes to assess Persian Gulf security posture." },
+      { id:9,  lat:23.6345, lng:58.5932, name:"Muscat",    type:"diplomatic", desc:"Omani back-channel hosts Iran-US proximity talks for third consecutive day." },
+      { id:10, lat:15.5527, lng:32.5324, name:"Khartoum",  type:"ground",     desc:"Iranian-linked militias consolidate positions amid power vacuum." },
+    ];
+
+    const MARKER_COLORS = { airstrike:"#b91c1c", ground:"#b45309", diplomatic:"#5b21b6" };
+
+    const FALLBACK_HEADLINES = [
+      { headline:"TEHRAN, March 15 — Iranian Foreign Ministry Convenes Emergency Session After Strait of Hormuz Standoff", brief:"Iran's foreign ministry convened Saturday after IRGC naval vessels shadowed a U.S. carrier group for 18 hours. Coastal defense batteries were placed on highest alert. Western diplomats in Geneva report back-channel talks have collapsed.", time:"47 minutes ago", importance:"breaking" },
+      { headline:"JERUSALEM, March 15 — Israeli Cabinet Approves Northern Border Posture Enhancement", brief:"Israel's security cabinet approved measures described as 'defensive enhancements' after intelligence reports of Hezbollah repositioning long-range Fateh-110 missiles. The United States was briefed in advance. Iron Dome batteries have been repositioned northward.", time:"1 hour ago", importance:"breaking" },
+      { headline:"BEIRUT, March 15 — Hezbollah Issues Formal Warning Over Syrian Airstrikes", brief:"Senior Hezbollah officials issued a formal warning to Israel over strikes in Syrian territory that the group claims struck affiliated storage facilities. The statement stopped short of declaring retaliation but invoked the 1979 defense pact with Tehran.", time:"2 hours ago", importance:"developing" },
+      { headline:"WASHINGTON, March 15 — Pentagon Repositions Gerald R. Ford Strike Group to Persian Gulf", brief:"The USS Gerald R. Ford carrier strike group repositioned to the Persian Gulf at the request of regional partners. Pentagon spokesman declined to characterize the move as escalatory. Congressional leaders were notified under War Powers Act provisions.", time:"2 hours ago", importance:"developing" },
+      { headline:"BAGHDAD, March 15 — Iraq Demands Explanation for Coalition Strikes Near Iranian Border", brief:"Iraq's prime minister formally demanded explanations from coalition partners after unidentified airstrikes struck western Iraq near the Iranian border. Coalition HQ in Doha issued no immediate statement. Russia called an emergency Security Council session.", time:"3 hours ago", importance:"update" },
+      { headline:"UNITED NATIONS, March 15 — Security Council Emergency Session Adjourns Without Resolution", brief:"A Security Council emergency session adjourned without consensus after Russia and China vetoed Western-sponsored language referencing Iranian proxy forces. An Arab-bloc alternative resolution was tabled after U.S. objections. Talks resume Monday.", time:"3 hours ago", importance:"update" },
+      { headline:"DUBAI, March 15 — GCC Energy Ministers Activate Oil Infrastructure Contingency Protocols", brief:"Gulf energy ministers activated contingency protocols for oil infrastructure protection. Saudi Aramco's Eastern Province facilities are running heightened security sweeps. Crude climbed 4.3 percent in Asian trading on supply-disruption fears.", time:"4 hours ago", importance:"developing" },
+      { headline:"ANKARA, March 15 — Turkey Offers Neutral Territory for Emergency Multilateral Talks", brief:"Turkish Foreign Minister Fidan announced readiness to host emergency diplomatic talks, citing Ankara's working relationships with all conflicting parties. Egypt's president offered parallel mediation. Three nations have reportedly expressed preliminary interest.", time:"5 hours ago", importance:"update" },
+      { headline:"CAIRO, March 15 — Arab League Calls Extraordinary Summit on Regional Security Architecture", brief:"The Arab League secretariat convened an extraordinary summit as member states sought a collective posture amid rapidly shifting alliances. Egypt proposed a multilateral maritime security framework for the Red Sea and Persian Gulf corridors. Saudi Arabia co-sponsored the motion.", time:"6 hours ago", importance:"update" },
+    ];
+
+    const FALLBACK_DISPATCH = {
+      byline: "Mira Khalil",
+      publication: "The Independent Dispatch",
+      dateline: "BEIRUT, Lebanon",
+      publishedAgo: "34 minutes ago",
+      content: `The streets of Beirut's southern suburbs were unusually quiet when I arrived this morning — that particular stillness veterans of conflict learn to read as portent rather than peace. The produce sellers had packed early. The children were not playing in the alleyways. Only the old men sat before their shuttered shops, worry beads counting out time between distant artillery and the muezzin's call.\n\nMy fixer, a former civil-war-era journalist who has survived three separate conflicts in this city, told me something I keep returning to: "The problem with this war is that everyone is fighting the last one." Hezbollah's leadership is responding to Israeli tactics from 2006, while Israeli planners respond to October 2023. Both sides are prepared for what already happened.\n\nWhat is actually unfolding is harder to see from inside it. The diplomatic back-channels I have tracked for weeks — Omani intermediaries, Qatari communications brokers, Swiss technical channels — have gone quiet in the way that means either a breakthrough or a complete collapse. In Beirut's government quarter, the ministers will not take my calls. That is never a good sign.\n\nWhat I know with certainty is this: the families moving north are not panicking. They are organized. They bring documents, medicines, and photographs. They have done this before. In Lebanon, displacement is not a crisis — it is a practiced art form, refined across generations of interrupted lives. The question now is not whether the next rupture comes, but whether anyone in a position of authority will choose, for once, to prevent it.`,
+      bio: "Mira Khalil has reported from eleven active conflict zones over fifteen years for major international wire services and independent publications.",
+    };
+
+    const TICKER_ITEMS = [
+      "STRAIT OF HORMUZ — Iranian naval vessels shadow U.S. carrier group for second consecutive day",
+      "UNITED NATIONS — Security Council emergency session fails to reach consensus on ceasefire framework",
+      "DAMASCUS — Syrian government denies hosting Iranian missile storage facilities amid Israeli claims",
+      "ANKARA — Turkish foreign minister meets with Iranian and Israeli envoys in back-to-back sessions",
+      "WASHINGTON — Pentagon confirms additional carrier group deployment to Eastern Mediterranean",
+      "LONDON — British intelligence assessment warns of significant escalation risk within 72 hours",
+      "CAIRO — Egyptian president hosts emergency Arab League consultation on regional security",
+      "PARIS — French foreign ministry summons ambassadors from six regional nations for consultations",
+    ];
+
+    // ─── Claude API (direct fetch, browser-safe) ────────────────────────────
+    async function callClaude(content, maxTokens, apiKey) {
+      const resp = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-api-key": apiKey,
+          "anthropic-version": "2023-06-01",
+          "anthropic-dangerous-direct-browser-access": "true",
+        },
+        body: JSON.stringify({
+          model: "claude-opus-4-6",
+          max_tokens: maxTokens,
+          messages: [{ role: "user", content }],
+        }),
+      });
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({}));
+        throw new Error(err.error?.message || `HTTP ${resp.status}`);
+      }
+      const data = await resp.json();
+      return data.content?.find(b => b.type === "text")?.text ?? "";
+    }
+
+    // ─── Leaflet loader ──────────────────────────────────────────────────────
+    function loadLeaflet() {
+      return new Promise(resolve => {
+        if (window.L) { resolve(); return; }
+        const css = document.createElement("link");
+        css.rel = "stylesheet";
+        css.href = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css";
+        document.head.appendChild(css);
+        const js = document.createElement("script");
+        js.src = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.js";
+        js.onload = resolve;
+        document.head.appendChild(js);
+      });
+    }
+
+    // ─── API Key Modal ───────────────────────────────────────────────────────
+    function ApiKeyModal({ onSubmit }) {
+      const [val, setVal] = useState("");
+      return (
+        <div className="modal-overlay">
+          <div className="modal-box">
+            <h2>Enter Anthropic API Key</h2>
+            <p>
+              This dashboard calls <strong>claude-opus-4-6</strong> on mount to generate
+              live news headlines and a journalist field dispatch. Enter your key below —
+              it is stored only in <code>localStorage</code> and never sent anywhere except
+              the Anthropic API.
+            </p>
+            <input
+              type="password"
+              placeholder="sk-ant-..."
+              value={val}
+              onChange={e => setVal(e.target.value)}
+              onKeyDown={e => e.key === "Enter" && val.trim() && onSubmit(val.trim())}
+              autoFocus
+            />
+            <br />
+            <button onClick={() => val.trim() && onSubmit(val.trim())}>
+              Load Dashboard
+            </button>
+            <button className="skip-btn" onClick={() => onSubmit(null)}>
+              Use fallback content
+            </button>
+          </div>
+        </div>
+      );
+    }
+
+    // ─── Skeleton helpers ────────────────────────────────────────────────────
+    function Sk({ w = "100%", h = 13, mb = 6 }) {
+      return <div className="skeleton" style={{ width: w, height: h, marginBottom: mb }} />;
+    }
+    function HeadlinesSkeleton() {
+      return (
+        <div>
+          {Array.from({ length: 7 }).map((_, i) => (
+            <div key={i} style={{ borderBottom: "1px solid #c5b49a", padding: "10px 0" }}>
+              <div style={{ display: "flex", gap: 8, marginBottom: 6 }}>
+                <Sk w={55} h={9} mb={0} /><Sk w={70} h={9} mb={0} />
+              </div>
+              <Sk w="100%" h={14} mb={4} /><Sk w="80%" h={14} mb={0} />
+            </div>
+          ))}
+        </div>
+      );
+    }
+    function DispatchSkeleton() {
+      return (
+        <div>
+          <Sk w="50%" h={18} mb={10} />
+          <Sk w="65%" h={12} mb={5} />
+          <Sk w="40%" h={11} mb={20} />
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div key={i} style={{ marginBottom: 16 }}>
+              <Sk w="100%" h={13} mb={5} /><Sk w="100%" h={13} mb={5} />
+              <Sk w="100%" h={13} mb={5} /><Sk w="72%"  h={13} mb={0} />
+            </div>
+          ))}
+        </div>
+      );
+    }
+
+    // ─── Main dashboard ──────────────────────────────────────────────────────
+    function GeopoliticalNewsDashboard({ apiKey }) {
+      const [headlines,   setHeadlines]   = useState([]);
+      const [dispatch,    setDispatch]    = useState(null);
+      const [expandedIdx, setExpandedIdx] = useState(null);
+      const [loadingHL,   setLoadingHL]   = useState(true);
+      const [loadingDS,   setLoadingDS]   = useState(true);
+      const [now,         setNow]         = useState(new Date());
+      const mapEl   = useRef(null);
+      const mapInst = useRef(null);
+
+      // clock
+      useEffect(() => {
+        const t = setInterval(() => setNow(new Date()), 60_000);
+        return () => clearInterval(t);
+      }, []);
+
+      // map
+      useEffect(() => {
+        let dead = false;
+        loadLeaflet().then(() => {
+          if (dead || !mapEl.current || mapInst.current) return;
+          const L = window.L;
+          const map = L.map(mapEl.current, {
+            center: [31.5, 44.5], zoom: 5,
+            zoomControl: false, attributionControl: true,
+          });
+          map.attributionControl.setPrefix("");
+          L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+            attribution: "© OpenStreetMap contributors", maxZoom: 10,
+          }).addTo(map);
+          L.control.zoom({ position: "topright" }).addTo(map);
+          CONFLICT_HOTSPOTS.forEach(spot => {
+            const color = MARKER_COLORS[spot.type];
+            const icon = L.divIcon({
+              className: "", iconSize: [24, 24], iconAnchor: [12, 12],
+              html: `<div style="position:relative;width:24px;height:24px;">
+                <div class="pulse-ring" style="background:${color};width:24px;height:24px;top:0;left:0;"></div>
+                <div style="position:absolute;width:10px;height:10px;border-radius:50%;background:${color};top:7px;left:7px;border:1.5px solid #fff;"></div>
+              </div>`,
+            });
+            L.marker([spot.lat, spot.lng], { icon }).addTo(map)
+              .bindPopup(
+                `<strong style="font-family:'Playfair Display',Georgia,serif;font-size:13px;">${spot.name}</strong>`
+                + `<br/><span style="font-size:11px;line-height:1.5;">${spot.desc}</span>`,
+                { maxWidth: 220 }
+              )
+              .bindTooltip(spot.name, { direction: "top" });
+          });
+          mapInst.current = map;
+        });
+        return () => {
+          dead = true;
+          if (mapInst.current) { mapInst.current.remove(); mapInst.current = null; }
+        };
+      }, []);
+
+      // content fetch
+      useEffect(() => {
+        const todayStr = now.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
+
+        async function fetchHeadlines() {
+          if (!apiKey) { setHeadlines(FALLBACK_HEADLINES); setLoadingHL(false); return; }
+          try {
+            const text = await callClaude(
+              `Generate exactly 9 realistic, dateline-style breaking news headlines about current geopolitical tensions in the Middle East (Iran, Israel, Lebanon, Gulf states). Today is ${todayStr}.
+
+Return ONLY a valid JSON array — no markdown, no code fences, no commentary. Each element:
+- "headline": AP dateline format, e.g. "TEHRAN, March 15 — ..."
+- "brief": 2–3 sentences in AP wire style, specific and factual-sounding
+- "time": relative time string e.g. "47 minutes ago"
+- "importance": one of "breaking" | "developing" | "update"
+
+Be specific — real cities, units, political figures, institutions. Genuine wire copy.`,
+              2800, apiKey
+            );
+            const m = text.match(/\[[\s\S]*\]/);
+            setHeadlines(m ? JSON.parse(m[0]) : FALLBACK_HEADLINES);
+          } catch { setHeadlines(FALLBACK_HEADLINES); }
+          finally  { setLoadingHL(false); }
+        }
+
+        async function fetchDispatch() {
+          if (!apiKey) { setDispatch(FALLBACK_DISPATCH); setLoadingDS(false); return; }
+          try {
+            const text = await callClaude(
+              `Write a journalist dispatch — first-person field report from an experienced independent war correspondent on the ground in the Middle East. Today is ${todayStr}.
+
+Return ONLY a valid JSON object — no markdown, no code fences, no extra text. Fields:
+- "byline": realistic journalist full name
+- "publication": independent publication name
+- "dateline": city + country ALL CAPS e.g. "BEIRUT, Lebanon"
+- "publishedAgo": e.g. "23 minutes ago"
+- "content": 4 paragraphs joined by \\n\\n — narrative, street-level, conversations with locals, analytical context. Dexter Filkins / Jon Lee Anderson register, not wire copy.
+- "bio": one sentence journalist bio
+
+Write from Beirut, southern Lebanon, or northern Israel border. Avoid clichés. Include one named local character and one concrete observed detail.`,
+              2000, apiKey
+            );
+            const m = text.match(/\{[\s\S]*\}/);
+            setDispatch(m ? JSON.parse(m[0]) : FALLBACK_DISPATCH);
+          } catch { setDispatch(FALLBACK_DISPATCH); }
+          finally  { setLoadingDS(false); }
+        }
+
+        fetchHeadlines();
+        fetchDispatch();
+      }, []); // eslint-disable-line
+
+      const dateStr = now.toLocaleDateString("en-US", {
+        weekday: "long", year: "numeric", month: "long", day: "numeric",
+      }).toUpperCase();
+
+      const badge = imp =>
+        imp === "breaking" ? "badge-breaking" : imp === "developing" ? "badge-developing" : "badge-update";
+
+      return (
+        <div style={{ background:"#f2ece0", minHeight:"100vh", color:"#1a1a1a", paddingBottom:52 }}>
+
+          {/* ── MASTHEAD ── */}
+          <header style={{ background:"#f2ece0", padding:"0 28px" }}>
+            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"8px 0", borderBottom:"1px solid #9c8b72", fontSize:11, fontFamily:"Georgia,serif", color:"#6a5840", letterSpacing:"0.06em" }}>
+              <span>ESTABLISHED 2024</span>
+              <span>{dateStr}</span>
+              <span>LATE CITY EDITION</span>
+            </div>
+
+            <div style={{ textAlign:"center", padding:"10px 0 6px" }}>
+              <h1 className="np-font" style={{ fontSize:"clamp(38px,6vw,80px)", fontWeight:900, letterSpacing:"-0.025em", lineHeight:1, color:"#0a0a0a", margin:0 }}>
+                THE WORLD DISPATCH
+              </h1>
+              <p style={{ fontFamily:"Georgia,serif", fontSize:12, fontStyle:"italic", color:"#6a5840", margin:"4px 0 0", letterSpacing:"0.12em" }}>
+                Independent Coverage of Global Affairs · War, Diplomacy &amp; Intelligence
+              </p>
+            </div>
+
+            <div style={{ display:"flex", justifyContent:"center", alignItems:"center", gap:14, background:"#1a1a1a", color:"#f2ece0", padding:"5px 28px", margin:"0 -28px", fontSize:10, fontFamily:"Georgia,serif", letterSpacing:"0.16em", textTransform:"uppercase" }}>
+              {["Middle East Crisis","Iran · Israel · Lebanon","Gulf Security","Diplomatic Fallout","Intelligence Brief"].map((s,i) => (
+                <React.Fragment key={s}>
+                  {i > 0 && <span style={{ color:"#9c8b72" }}>·</span>}
+                  <span>{s}</span>
+                </React.Fragment>
+              ))}
+            </div>
+          </header>
+
+          {/* ── MAIN ── */}
+          <main style={{ padding:"0 28px" }}>
+
+            {/* MAP */}
+            <section style={{ borderBottom:"1px solid #9c8b72", paddingBottom:16, marginBottom:16 }}>
+              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-end", padding:"12px 0 8px", borderBottom:"3px solid #1a1a1a", marginBottom:12 }}>
+                <div>
+                  <span className="sec-label">Conflict Theater</span>
+                  <h2 className="np-font" style={{ fontSize:22, fontWeight:700, margin:0, lineHeight:1.2 }}>
+                    The Middle East Cauldron — Interactive War Map
+                  </h2>
+                </div>
+                <p style={{ fontFamily:"Georgia,serif", fontSize:11, fontStyle:"italic", color:"#6a5840", flexShrink:0, marginLeft:16 }}>
+                  Live tracking · Updated continuously
+                </p>
+              </div>
+
+              <div style={{ display:"flex", gap:16 }}>
+                {/* map tile */}
+                <div style={{ flex:1, border:"1px solid #9c8b72" }}>
+                  <div ref={mapEl} style={{ height:345, width:"100%", background:"#e8e0cc" }} />
+                </div>
+
+                {/* legend */}
+                <div style={{ width:164, flexShrink:0, border:"1px solid #9c8b72", background:"#ede7d9", padding:"14px 12px", height:345, overflowY:"auto" }}>
+                  <p style={{ fontFamily:"Georgia,serif", fontSize:9, fontWeight:"bold", textTransform:"uppercase", letterSpacing:"0.16em", color:"#6a5840", marginBottom:14 }}>Map Legend</p>
+                  {Object.entries(MARKER_COLORS).map(([type, color]) => (
+                    <div key={type} style={{ display:"flex", alignItems:"center", gap:8, marginBottom:12 }}>
+                      <div style={{ position:"relative", width:18, height:18, flexShrink:0 }}>
+                        <div style={{ position:"absolute", inset:0, borderRadius:"50%", background:color, opacity:.28, animation:"pulse-ring 2.4s ease-out infinite" }} />
+                        <div style={{ position:"absolute", width:8, height:8, top:5, left:5, borderRadius:"50%", background:color }} />
+                      </div>
+                      <span style={{ fontFamily:"Georgia,serif", fontSize:11, lineHeight:1.3, color:"#2a1a0a" }}>
+                        {type==="airstrike"?"Airstrike Operations":type==="ground"?"Ground Operations":"Diplomatic Flashpoint"}
+                      </span>
+                    </div>
+                  ))}
+                  <div style={{ borderTop:"1px solid #9c8b72", marginTop:14, paddingTop:12 }}>
+                    <p style={{ fontFamily:"Georgia,serif", fontSize:9, fontWeight:"bold", textTransform:"uppercase", letterSpacing:"0.14em", color:"#6a5840", marginBottom:8 }}>Active Zones</p>
+                    {CONFLICT_HOTSPOTS.map(s => (
+                      <div key={s.id} style={{ display:"flex", alignItems:"center", gap:6, marginBottom:5 }}>
+                        <div style={{ width:5, height:5, borderRadius:"50%", background:MARKER_COLORS[s.type], flexShrink:0 }} />
+                        <span style={{ fontFamily:"Georgia,serif", fontSize:10, color:"#3a2a1a" }}>{s.name}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            {/* TWO-COLUMN */}
+            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:0 }}>
+
+              {/* LEFT: News Feed */}
+              <section className="col-rule" style={{ paddingRight:22 }}>
+                <div style={{ borderTop:"3px solid #1a1a1a", paddingTop:12, marginBottom:10 }}>
+                  <span className="sec-label">Breaking Developments</span>
+                  <h2 className="np-font" style={{ fontSize:20, fontWeight:700, margin:0, lineHeight:1.2 }}>
+                    Wire Reports &amp; Field Dispatches
+                  </h2>
+                  <p style={{ fontFamily:"Georgia,serif", fontSize:11, fontStyle:"italic", color:"#6a5840", margin:"4px 0 0" }}>
+                    Click any headline to expand the wire brief
+                  </p>
+                </div>
+                <div style={{ height:525, overflowY:"auto", paddingRight:6 }}>
+                  {loadingHL ? <HeadlinesSkeleton /> : headlines.map((item, idx) => (
+                    <div key={idx} className="hl-row"
+                      onClick={() => setExpandedIdx(expandedIdx === idx ? null : idx)}
+                      style={{ paddingLeft:4, paddingRight:4 }}>
+                      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:4 }}>
+                        <span className={badge(item.importance)}>{item.importance}</span>
+                        <span style={{ fontFamily:"Georgia,serif", fontSize:10, color:"#9c8b72", fontStyle:"italic" }}>{item.time}</span>
+                      </div>
+                      <p className="np-font" style={{ fontSize:14, fontWeight: expandedIdx===idx ? 700 : 400, lineHeight:1.42, margin:0, color:"#1a1a1a" }}>
+                        {item.headline}
+                      </p>
+                      {expandedIdx === idx && item.brief && (
+                        <p style={{ fontFamily:"Georgia,serif", fontSize:12, lineHeight:1.65, margin:"8px 0 2px", color:"#2a1a0a", borderLeft:"2px solid #9c8b72", paddingLeft:10, fontStyle:"italic" }}>
+                          {item.brief}
+                        </p>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </section>
+
+              {/* RIGHT: Journalist Dispatch */}
+              <section style={{ paddingLeft:22 }}>
+                <div style={{ borderTop:"3px solid #1a1a1a", paddingTop:12, marginBottom:10 }}>
+                  <span className="sec-label">Field Correspondence</span>
+                  <h2 className="np-font" style={{ fontSize:20, fontWeight:700, margin:0, lineHeight:1.2 }}>
+                    Dispatch: From Our Correspondent on the Ground
+                  </h2>
+                  <p style={{ fontFamily:"Georgia,serif", fontSize:11, fontStyle:"italic", color:"#6a5840", margin:"4px 0 0" }}>
+                    First-person field report · Independent journalism
+                  </p>
+                </div>
+                <div style={{ height:525, overflowY:"auto", paddingRight:6 }}>
+                  {loadingDS ? <DispatchSkeleton /> : dispatch && (
+                    <article>
+                      <div style={{ borderBottom:"1px solid #9c8b72", paddingBottom:12, marginBottom:16 }}>
+                        <p className="np-font" style={{ fontSize:20, fontWeight:700, margin:"0 0 3px", color:"#1a1a1a" }}>{dispatch.byline}</p>
+                        <p style={{ fontFamily:"Georgia,serif", fontSize:12, fontStyle:"italic", color:"#6a5840", margin:"0 0 5px" }}>{dispatch.publication}</p>
+                        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+                          <p style={{ fontFamily:"Georgia,serif", fontSize:11, fontWeight:"bold", color:"#2a1a0a", margin:0, letterSpacing:"0.07em", textTransform:"uppercase" }}>{dispatch.dateline}</p>
+                          <p style={{ fontFamily:"Georgia,serif", fontSize:11, color:"#9c8b72", margin:0, fontStyle:"italic" }}>{dispatch.publishedAgo}</p>
+                        </div>
+                      </div>
+
+                      {(dispatch.content || "").split("\n\n").map((para, i) => (
+                        <p key={i} style={{ fontFamily:"Georgia,serif", fontSize:13.5, lineHeight:1.72, margin:"0 0 14px", color:"#1a1a1a", textAlign:"justify", textIndent: i > 0 ? "1.6em" : 0 }}>
+                          {i === 0 && <span className="drop-cap">{para[0]}</span>}
+                          {i === 0 ? para.slice(1) : para}
+                        </p>
+                      ))}
+
+                      {dispatch.bio && (
+                        <div style={{ borderTop:"1px solid #9c8b72", paddingTop:10, marginTop:6 }}>
+                          <p style={{ fontFamily:"Georgia,serif", fontSize:11, fontStyle:"italic", color:"#6a5840", margin:0, lineHeight:1.55 }}>
+                            <em>{dispatch.bio}</em>
+                          </p>
+                        </div>
+                      )}
+                    </article>
+                  )}
+                </div>
+              </section>
+            </div>
+          </main>
+
+          {/* ── FOOTER TICKER ── */}
+          <footer style={{ position:"fixed", bottom:0, left:0, right:0, height:38, background:"#111", borderTop:"2px solid #7a6550", display:"flex", alignItems:"center", overflow:"hidden", zIndex:1000 }}>
+            <div style={{ background:"#8b0000", color:"#f2ece0", padding:"0 14px", height:"100%", display:"flex", alignItems:"center", flexShrink:0, borderRight:"2px solid #b91c1c" }}>
+              <span style={{ fontFamily:"Georgia,serif", fontSize:10, fontWeight:"bold", letterSpacing:"0.2em", textTransform:"uppercase", whiteSpace:"nowrap" }}>
+                ● LIVE UPDATES
+              </span>
+            </div>
+            <div style={{ flex:1, overflow:"hidden" }}>
+              <div className="ticker-track">
+                {[...TICKER_ITEMS, ...TICKER_ITEMS].map((item, i) => (
+                  <span key={i} style={{ fontFamily:"Georgia,serif", fontSize:12, color:"#e8e0cc", padding:"0 36px", display:"inline-block" }}>
+                    <span style={{ color:"#9c8b72", marginRight:10 }}>■</span>{item}
+                  </span>
+                ))}
+              </div>
+            </div>
+          </footer>
+        </div>
+      );
+    }
+
+    // ─── App shell (handles API key gate) ───────────────────────────────────
+    function App() {
+      const [apiKey, setApiKey] = useState(() => localStorage.getItem("np_api_key") || undefined);
+
+      function handleKey(key) {
+        if (key) {
+          localStorage.setItem("np_api_key", key);
+          setApiKey(key);
+        } else {
+          setApiKey(null); // null = use fallback content, skip modal
+        }
+      }
+
+      // undefined = haven't decided yet (show modal)
+      if (apiKey === undefined) return <ApiKeyModal onSubmit={handleKey} />;
+
+      return <GeopoliticalNewsDashboard apiKey={apiKey} />;
+    }
+
+    ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+  </script>
+</body>
+</html>
