@@ -1,7 +1,7 @@
 ## Hi there! 👋
-- 🌱 My name is Soham Solanki! I'm currently studying Information Science and Data Analytics @ UIUC.
-- 🧑‍💻 Experience with HTML, CSS, Java, Javascript, Python, and C++.
-- 👨‍💼 Looking for summer internships in the Information Technology and Data Analytics fields.
+- 🌱 My name is Soham Solanki! I'm currently studying Information Science, with a focus on Data Science @ UIUC.
+- 🧑‍💻 Experience with Python, SQL, Swift, JavaScript.
+- 👨‍💼 Looking for summer internships in the Data Science/Analytics/Engineering fields.
 - 📫 How to reach me: [email](mailto:sohamsolanki@outlook.com) is preferred!
 - 🏙️ Reach out on [LinkedIn](https://linkedin.com/in/sohamsolanki), I would love to connect!
 
